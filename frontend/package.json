@@ -1,0 +1,84 @@
+{
+  "name": "netshield-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "main": "main.js",
+  "dependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^13.5.0",
+    "chart.js": "^4.5.1",
+    "react": "^19.2.4",
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.13.1",
+    "react-scripts": "5.0.1",
+    "web-vitals": "^2.1.4"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "dev": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "electron-dev": "concurrently \"npm start\" \"wait-on tcp:3000 && electron . --no-sandbox --disable-gpu\"",
+    "electron-dev-root": "concurrently \"npm start\" \"wait-on tcp:3000 && electron . --no-sandbox --disable-gpu\"",
+    "electron:build": "react-scripts build && electron-builder",
+    "electron:pack": "electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.netshield.desktop",
+    "productName": "NetShield",
+    "files": [
+      "build/**/*",
+      "main.js",
+      "preload.js"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist/capture",
+        "to": "capture",
+        "filter": ["**/*"]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }]
+    },
+    "win": {
+      "target": "nsis",
+      "extraResources": [
+        { "from": "../dist/capture.exe", "to": "capture.exe" }
+      ]
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Network"
+    }
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "electron": "^41.2.1",
+    "electron-updater": "^6.8.3",
+    "wait-on": "^9.0.5"
+  }
+}

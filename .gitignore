@@ -1,0 +1,52 @@
+# Claude Code session data
+.claude/
+CLAUDE.md
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# Build artifacts
+build_pyinstaller/
+dist/
+*.spec.bak
+
+# Database
+*.db
+*.sqlite3
+
+# ML model files — intentionally committed at project root (ddos_ffnn.keras etc.)
+# If you want to exclude them, uncomment the lines below:
+# *.keras
+# *.pkl
+# *.pt
+# *.h5
+
+# Secrets & environment
+.env
+.env.*
+*.pem
+*.key
+
+# Large training datasets (too big for GitHub — keep locally or in cloud storage)
+Training/data/
+*.csv
+
+# Logs
+*.log
+capture.log
+live_stats.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp

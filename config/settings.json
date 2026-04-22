@@ -1,0 +1,14 @@
+{
+  "query_interval": 0.5,
+  "alert_threshold": 0.92,
+  "flow_timeout": 30.0,
+  "min_packets_to_score": 10,
+  "min_flow_duration": 2.0,
+  "sampling_rate": 1.0,
+  "worker_threads": 1,
+  "safe_ips": [],
+  "safe_ports": [],
+  "model_api_url": "http://localhost:8001",
+  "backend_url": "http://localhost:8000",
+  "interface": "eth0"
+}

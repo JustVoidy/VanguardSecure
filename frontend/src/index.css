@@ -1,0 +1,44 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0d1117;
+  --surface:   #161b22;
+  --border:    #21262d;
+  --muted:     #30363d;
+  --cyan:      #00d4ff;
+  --blue:      #3b82f6;
+  --purple:    #8b5cf6;
+  --green:     #10b981;
+  --red:       #ff2d55;
+  --orange:    #f97316;
+  --amber:     #f59e0b;
+  --t1:        #f0f6fc;
+  --t2:        #8b949e;
+  --t3:        #484f58;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--t1);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+#root { height: 100%; }
+svg { display: block; }
+/* Add this at the bottom of index.css */
+body.light {
+  --bg:      #f0f2f5;
+  --surface: #ffffff;
+  --border:  #e1e4e8;
+  --muted:   #eaedf0;
+  --t1:      #0d1117;
+  --t2:      #444d56;
+  --t3:      #959da5;
+}

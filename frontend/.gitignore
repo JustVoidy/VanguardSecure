@@ -1,0 +1,48 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# production
+/build
+/dist
+
+# testing
+/coverage
+
+# environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+
+# Java / Maven
+*.class
+target/
+*.jar
+*.war
+
+# Python
+*.py[cod]
+
+# media files (optional)
+*.mp4
+*.tiff
+*.avi
+*.flv
+*.mov
+*.wmv

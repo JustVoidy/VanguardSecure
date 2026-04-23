@@ -179,7 +179,7 @@ def load_csvs(syn_path: str, udp_path: str) -> pd.DataFrame:
     print()
 
     return df
-
+56 → 128 → 64 → 1
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TRAINING LOOP

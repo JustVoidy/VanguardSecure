@@ -85,7 +85,7 @@ export default function App() {
           fps: [...prev.fps.slice(1), curAi?.fps || 0],
           bw: [...prev.bw.slice(1), (curNet?.total_bw || 0) / 1024], // KB/s
           flows: [...prev.flows.slice(1), curNet?.active_flows || 0],
-          confidence: [...prev.confidence.slice(1), curAi?.threat_level === "HIGH" ? 99 : curAi?.threat_level === "MEDIUM" ? 75 : 10],
+          confidence: curAi?.recent_scores?.length > 0 ? curAi.recent_scores : prev.confidence,
           syn: [...prev.syn.slice(1), curNet?.syn_rate || 0],
           udp: [...prev.udp.slice(1), curNet?.udp_rate || 0]
         };
@@ -127,7 +127,7 @@ export default function App() {
         onEventsClick={(hide = false) => { if (hide) setShowEvents(false); else { setShowEvents(true); setShowProfile(false); setShowMitigation(false); } closeSidebar(); }}
       />
       <main className="main">
-        <Header onProfileClick={() => setShowProfile(true)} onToggleSidebar={toggleSidebar} />
+        <Header onToggleSidebar={toggleSidebar} />
 
         {showProfile ? (
           <UserProfile
@@ -195,7 +195,7 @@ export default function App() {
                 pillColor="#8b5cf6"
               />
               <ChartCard 
-                label="NETWORK TRAFFIC (SCAPY)" 
+                label="NETWORK BANDWIDTH" 
                 color="#00d4ff" 
                 unit=" KB/s" 
                 dataSeries={history.bw}
@@ -252,8 +252,27 @@ export default function App() {
               />
 
               <StatsCard
-                title="Global Threat Map"
-                rows={netStats?.countries?.length > 0 ? netStats.countries : COUNTRY_STATS}
+                title="Traffic by Origin"
+                rows={(() => {
+                  const LABEL_COLOR = {
+                    LAN: '#10b981', OTH: '#484f58',
+                    CHN: '#f97316', USA: '#3b82f6', RUS: '#8b5cf6',
+                    IND: '#00d4ff', BRA: '#f59e0b', EUR: '#6366f1',
+                    KOR: '#ec4899', JPN: '#14b8a6',
+                  };
+                  const FALLBACK = ['#00d4ff','#3b82f6','#8b5cf6','#f59e0b','#f97316'];
+                  const src = netStats?.countries?.length > 0 ? netStats.countries : COUNTRY_STATS;
+                  const maxCount = Math.max(...src.map(c => c.count ?? c.pct ?? 0), 0) || 1;
+                  return src.map((c, i) => {
+                    const lbl = c.lbl ?? c.country ?? 'OTH';
+                    return {
+                      lbl,
+                      pct: ((c.count ?? c.pct ?? 0) / maxCount) * 100,
+                      num: c.count ?? undefined,
+                      color: c.color ?? LABEL_COLOR[lbl] ?? FALLBACK[i % 5],
+                    };
+                  });
+                })()}
               />
             </div>
 

@@ -16,7 +16,8 @@ from app.database import Base, engine, redis_client
 from app.services.event_store import (
     recent_events as _recent_events_from_store,
     scored_fps, scored_total, scored_active_flows,
-    scored_syn_fps, scored_udp_fps, top_source_ips,
+    scored_syn_fps, scored_udp_fps, top_source_ips, ip_to_country,
+    recent_flow_scores,
     _EVENTS_KEY, _EVENT_PREFIX,
 )
 from app.routes import auth, dashboard, inference, mitigation, notifications, profile, capture_control
@@ -57,15 +58,17 @@ def _recent_events():
 def _ai_payload(rows) -> str:
     threat = "LOW"
     for e in rows:
-        if e.severity in ("CRITICAL", "HIGH") or (e.threat_score or 0) >= 0.9:
+        s = e.threat_score or 0
+        if e.severity in ("CRITICAL", "HIGH") or s >= 0.9:
             threat = "HIGH"; break
-        elif (e.threat_score or 0) >= 0.7:
+        elif s >= 0.7:
             threat = "MEDIUM"
     return json.dumps({
-        "threat_level":  threat,
-        "total_alerts":  len(rows),
-        "total_scored":  scored_total(),
-        "fps":           scored_fps(),
+        "threat_level":   threat,
+        "total_alerts":   len(rows),
+        "total_scored":   scored_total(),
+        "fps":            scored_fps(),
+        "recent_scores":  recent_flow_scores(),
     })
 
 
@@ -84,7 +87,13 @@ def _net_payload() -> str:
     _prev_net_time  = now
 
     top = top_source_ips(10)
-    countries = [{"country": ip, "count": c, "pct": 0} for ip, c in top[:5]]
+    from collections import Counter
+    country_counts: Counter = Counter()
+    for ip, cnt in top:
+        country_counts[ip_to_country(ip)] += cnt
+    top5 = country_counts.most_common(5)
+    max_count = top5[0][1] if top5 else 1
+    countries = [{"country": cc, "count": n, "pct": round(n / max_count * 100, 1)} for cc, n in top5]
     return json.dumps({
         "total_bw":     bw,
         "active_flows": scored_active_flows(),

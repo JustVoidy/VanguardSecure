@@ -3,9 +3,11 @@ Unified event persistence: writes to SQLite always, Redis when available.
 Reading prefers Redis (fast) and falls back to SQLite.
 """
 
+import ipaddress
 import uuid
 from collections import deque
 from datetime import datetime, timedelta
+from functools import lru_cache
 
 from app.database import redis_client, SessionLocal
 from app.models.event import Event, EventRecord
@@ -16,7 +18,18 @@ _EVENT_PREFIX = "event:"
 # Rolling window of all scored flow timestamps (attack + benign).
 # Used for fps / total_scored metrics without needing DB writes for benign flows.
 _scored_timestamps: deque = deque()
-_scored_flows: deque = deque()  # (timestamp, src_ip, dst_ip, protocol)
+_scored_flows: deque = deque()     # (timestamp, src_ip, dst_ip, protocol)
+_flow_scores:  deque = deque(maxlen=20)  # latest per-flow model probabilities (0–1)
+
+
+def record_flow_score(prob: float) -> None:
+    """Append the raw model probability for the most recent flow."""
+    _flow_scores.append(round(prob * 100, 1))
+
+
+def recent_flow_scores() -> list[float]:
+    """Last ≤20 per-flow confidence percentages, oldest first."""
+    return list(_flow_scores)
 
 
 def record_scored_flow(src_ip: str, dst_ip: str, protocol: str = "") -> None:
@@ -152,6 +165,98 @@ def recent_events(window_seconds: int = 60) -> list[Event]:
         ]
     finally:
         db.close()
+
+
+# CIDR → country, sorted most-specific first so sub-ranges override broader ones.
+# Sources: IANA, ARIN, RIPE NCC, APNIC, LACNIC, AFRINIC delegation files.
+_GEO_CIDRS: list[tuple[ipaddress.IPv4Network, str]] = sorted(
+    [
+        (ipaddress.ip_network(cidr), cc) for cidr, cc in [
+            # ── Private / Special ──────────────────────────────────────────
+            ('0.0.0.0/8',       'LAN'),   # "This" network
+            ('10.0.0.0/8',      'LAN'),   # RFC 1918
+            ('100.64.0.0/10',   'LAN'),   # RFC 6598 CGNAT
+            ('127.0.0.0/8',     'LAN'),   # Loopback
+            ('169.254.0.0/16',  'LAN'),   # Link-local
+            ('172.16.0.0/12',   'LAN'),   # RFC 1918
+            ('192.168.0.0/16',  'LAN'),   # RFC 1918
+            ('198.18.0.0/15',   'LAN'),   # Benchmarking
+            ('240.0.0.0/4',     'LAN'),   # Reserved
+            # ── China (CNNIC / APNIC) ──────────────────────────────────────
+            ('36.0.0.0/8',      'CHN'), ('42.0.0.0/8',   'CHN'),
+            ('58.0.0.0/7',      'CHN'),                           # 58–59
+            ('60.0.0.0/8',      'CHN'), ('61.0.0.0/8',   'CHN'),
+            ('101.0.0.0/8',     'CHN'), ('103.0.0.0/8',  'CHN'),
+            ('106.0.0.0/8',     'CHN'), ('110.0.0.0/7',  'CHN'), # 110–111
+            ('112.0.0.0/6',  'CHN'),  # 112–115
+            ('116.0.0.0/6',  'CHN'),  # 116–119
+            ('120.0.0.0/6',  'CHN'),  # 120–123
+            ('124.0.0.0/7',  'CHN'),  # 124–125
+            # ── Russia (RIPE NCC → RU) ─────────────────────────────────────
+            ('46.0.0.0/8',      'RUS'),
+            ('77.72.0.0/13',    'RUS'), ('77.88.0.0/13',  'RUS'),
+            ('87.224.0.0/12',   'RUS'),
+            ('89.108.0.0/14',   'RUS'), ('91.108.0.0/14', 'RUS'),
+            ('95.24.0.0/13',    'RUS'),
+            ('176.0.0.0/10',    'RUS'), ('178.128.0.0/10','RUS'),
+            # ── USA (ARIN) ─────────────────────────────────────────────────
+            ('3.0.0.0/8',   'USA'), ('4.0.0.0/8',   'USA'), ('8.0.0.0/8',  'USA'),
+            ('9.0.0.0/8',   'USA'), ('12.0.0.0/8',  'USA'), ('16.0.0.0/8', 'USA'),
+            ('17.0.0.0/8',  'USA'), ('18.0.0.0/8',  'USA'), ('20.0.0.0/8', 'USA'),
+            ('23.0.0.0/8',  'USA'), ('24.0.0.0/8',  'USA'), ('34.0.0.0/8', 'USA'),
+            ('35.0.0.0/8',  'USA'), ('38.0.0.0/8',  'USA'), ('40.0.0.0/8', 'USA'),
+            ('44.0.0.0/8',  'USA'), ('45.0.0.0/8',  'USA'), ('47.0.0.0/8', 'USA'),
+            ('52.0.0.0/8',  'USA'), ('54.0.0.0/8',  'USA'), ('63.0.0.0/8', 'USA'),
+            ('64.0.0.0/6',  'USA'),  # 64–67
+            ('68.0.0.0/6',  'USA'),  # 68–71
+            ('72.0.0.0/5',  'USA'),  # 72–79
+            ('97.0.0.0/8',  'USA'), ('98.0.0.0/7',  'USA'),  # 98–99
+            ('104.0.0.0/8', 'USA'), ('107.0.0.0/8', 'USA'), ('108.0.0.0/8','USA'),
+            ('162.0.0.0/8', 'USA'), ('164.0.0.0/8', 'USA'), ('166.0.0.0/8','USA'),
+            ('170.0.0.0/8', 'USA'), ('184.0.0.0/8', 'USA'), ('198.0.0.0/7','USA'),
+            ('204.0.0.0/6', 'USA'),  # 204–207
+            ('208.0.0.0/5', 'USA'),  # 208–215
+            ('216.0.0.0/8', 'USA'),
+            # ── India (IRINN / APNIC) ──────────────────────────────────────
+            ('14.96.0.0/11',    'IND'), ('49.32.0.0/11',  'IND'),
+            ('117.192.0.0/10',  'IND'), ('122.160.0.0/11','IND'),
+            ('182.64.0.0/10',   'IND'), ('183.0.0.0/10',  'IND'),
+            ('220.224.0.0/12',  'IND'),
+            # ── Brazil (LACNIC) ───────────────────────────────────────────
+            ('177.0.0.0/8', 'BRA'), ('179.0.0.0/8', 'BRA'), ('186.0.0.0/8','BRA'),
+            ('187.0.0.0/8', 'BRA'), ('189.0.0.0/8', 'BRA'), ('191.0.0.0/8','BRA'),
+            ('200.0.0.0/7',     'BRA'),  # 200–201
+            # ── Europe (RIPE NCC, broad — RU-specific sub-ranges above win) ─
+            ('5.0.0.0/8',   'EUR'), ('31.0.0.0/8',  'EUR'), ('37.0.0.0/8', 'EUR'),
+            ('77.0.0.0/8',  'EUR'), ('78.0.0.0/7',  'EUR'),  # 78–79
+            ('80.0.0.0/4',  'EUR'),  # 80–95
+            ('176.0.0.0/8', 'EUR'), ('178.0.0.0/8', 'EUR'), ('185.0.0.0/8','EUR'),
+            ('188.0.0.0/8', 'EUR'), ('193.0.0.0/8', 'EUR'), ('194.0.0.0/7','EUR'),
+            ('212.0.0.0/7', 'EUR'), ('217.0.0.0/8', 'EUR'),
+            # ── Japan (JPNIC / APNIC) ─────────────────────────────────────
+            ('126.0.0.0/8', 'JPN'), ('133.0.0.0/8', 'JPN'),
+            ('150.0.0.0/8', 'JPN'), ('153.0.0.0/8', 'JPN'),
+            # ── South Korea (KISA / APNIC) ────────────────────────────────
+            ('175.192.0.0/10',  'KOR'),
+            ('211.0.0.0/8', 'KOR'), ('218.0.0.0/7', 'KOR'),  # 218–219
+            ('221.0.0.0/8', 'KOR'), ('222.0.0.0/8', 'KOR'),
+        ]
+    ],
+    key=lambda x: x[0].prefixlen,
+    reverse=True,  # longest prefix wins
+)
+
+
+@lru_cache(maxsize=4096)
+def ip_to_country(ip: str) -> str:
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return 'OTH'
+    for net, cc in _GEO_CIDRS:
+        if addr in net:
+            return cc
+    return 'OTH'
 
 
 def latest_events(limit: int = 50) -> list[Event]:

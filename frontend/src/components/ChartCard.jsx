@@ -20,19 +20,17 @@ function seedData(base, len = 20) {
 
 export default function ChartCard({ label, color, base, unit, pillBg, pillColor, dataSeries }) {
   const [internalData, setInternalData] = useState(() => seedData(base));
-  const [delta, setDelta] = useState(0);
 
   // Use external data if provided, else use internal mock data
   const data = dataSeries || internalData;
 
   useEffect(() => {
-    if (dataSeries) return; // Don't run mock interval if we have real data
+    if (dataSeries) return;
 
     const id = setInterval(() => {
       setInternalData(prev => {
         const last = prev[prev.length - 1];
         const next = Math.max(1, Math.round(last + (Math.random() - 0.45) * last * 0.2));
-        setDelta(next - last);
         return [...prev.slice(1), next];
       });
     }, 2000);
@@ -40,6 +38,8 @@ export default function ChartCard({ label, color, base, unit, pillBg, pillColor,
   }, [dataSeries]);
 
   const current = data[data.length - 1];
+  const prev = data[data.length - 2] ?? current;
+  const delta = current - prev;
 
   const sign = delta >= 0 ? '+' : '';
 

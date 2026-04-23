@@ -6,7 +6,7 @@ import json
 
 from app.models.event import Event
 from app.services.predictor import predictor
-from app.services.event_store import save_event, record_scored_flow
+from app.services.event_store import save_event, record_scored_flow, record_flow_score
 
 _CONFIG_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "settings.json"
 
@@ -81,6 +81,7 @@ def predict_flow(data: PredictRequest):
     attack_type = _attack_type(data.features, data.flow_meta.protocol) if is_attack else "BENIGN"
 
     record_scored_flow(data.flow_meta.src_ip, data.flow_meta.dst_ip, data.flow_meta.protocol)
+    record_flow_score(prob)
 
     if is_attack:
         save_event(Event(
@@ -129,6 +130,7 @@ def predict_batch(data: PredictBatchRequest):
 
         if meta:
             record_scored_flow(meta.src_ip, meta.dst_ip, meta.protocol if meta else "")
+            record_flow_score(score)
         if is_attack and meta:
             save_event(Event(
                 event_type=atype,

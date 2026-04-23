@@ -232,6 +232,31 @@
 .stat-num   { font-size: 10px; color: var(--t3); min-width: 50px; text-align: right; font-variant-numeric: tabular-nums; }
 
 
+/* ── Threat Map ── */
+.threat-map-card { display: flex; flex-direction: column; }
+.threat-map-svg-wrap { margin-bottom: 10px; border-radius: var(--radius-sm); overflow: hidden; background: rgba(0,212,255,0.02); border: 1px solid var(--border); }
+.threat-map-svg { width: 100%; height: auto; display: block; }
+.map-ref-line { stroke: rgba(255,255,255,0.04); stroke-width: 0.5; }
+.map-equator  { stroke: rgba(0,212,255,0.08); }
+.map-continent { fill: rgba(110,140,170,0.2); stroke: rgba(160,200,230,0.3); stroke-width: 0.5; }
+.map-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mapPulse 2.4s ease-out infinite;
+}
+@keyframes mapPulse {
+  0%   { transform: scale(1);   opacity: 0.65; }
+  100% { transform: scale(3.5); opacity: 0;    }
+}
+.map-country-lbl {
+  font-size: 6px;
+  font-family: monospace;
+  text-anchor: middle;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.threat-country-list { display: flex; flex-direction: column; gap: 2px; }
+
 /* ── Events ── */
 .events-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; margin-bottom: 20px; }
 .events-hd   { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }

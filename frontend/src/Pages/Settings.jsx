@@ -1,23 +1,41 @@
 import "../App.css";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-export default function UserProfile({ userName, onBack, backendUrl: initialBackendUrl, onBackendChange }) {
+function apiFetch(url, opts = {}) {
+  const token = localStorage.getItem("token");
+  return fetch(url, {
+    ...opts,
+    headers: { ...(opts.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+}
+
+export default function UserProfile({ onBack, backendUrl: initialBackendUrl, onBackendChange }) {
   const [activeTab, setActiveTab] = useState("profile");
   const [editMode, setEditMode] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved]       = useState(false);
+  const [saveErr, setSaveErr]   = useState("");
 
   const [profile, setProfile] = useState({
-    name: userName || "Admin",
-    email: `${userName || "admin"}@netshield.com`,
-    phone: "+91 98765 43210",
+    name: "Admin",
+    email: "",
+    phone: "",
     role: "Administrator",
-    location: "New Delhi, India",
-    joined: "March 2024",
-    lastLogin: "Today at 6:31 PM",
+    location: "",
+    joined: "",
+    lastLogin: "",
     twoFA: true,
     alerts: true,
     reports: false,
   });
+
+  const backendUrl = initialBackendUrl || "http://localhost:8000";
+
+  useEffect(() => {
+    apiFetch(`${backendUrl}/profile/`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setProfile(p => ({ ...p, ...data })); })
+      .catch(() => {});
+  }, [backendUrl]);
 
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUser, setNewUser] = useState({ name: "", email: "", role: "" });
@@ -47,7 +65,23 @@ export default function UserProfile({ userName, onBack, backendUrl: initialBacke
     setProfile((p) => ({ ...p, [field]: value }));
   }
 
-  function handleSave() {
+  async function handleSave() {
+    setSaveErr("");
+    try {
+      const res = await apiFetch(`${backendUrl}/profile/update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name:     profile.name,
+          phone:    profile.phone    || "",
+          location: profile.location || "",
+          twoFA:    profile.twoFA,
+          alerts:   profile.alerts,
+          reports:  profile.reports,
+        }),
+      });
+      if (!res.ok) { setSaveErr("Save failed."); return; }
+    } catch { setSaveErr("Cannot reach backend."); return; }
     setEditMode(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -75,7 +109,8 @@ export default function UserProfile({ userName, onBack, backendUrl: initialBacke
         {/* Profile tab actions */}
         {activeTab === "profile" && (
           <div style={{ display: "flex", gap: "8px" }}>
-            {saved && <div className="up-saved-badge">✓ Changes saved</div>}
+            {saved    && <div className="up-saved-badge">✓ Changes saved</div>}
+            {saveErr  && <div style={{ fontSize: "12px", color: "#ff2d55" }}>{saveErr}</div>}
             {editMode ? (
               <>
                 <button className="up-btn-ghost" onClick={() => setEditMode(false)}>Cancel</button>

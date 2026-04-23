@@ -3,20 +3,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 
-from app.database import SessionLocal
+from app.database import get_db
 from app.models.user import User
 from app.utils.jwt_utils import verify_token
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 class ProfileUpdate(BaseModel):

@@ -152,6 +152,11 @@ function TypeIcon({ type }) {
   );
 }
 
+const BACKEND =
+  typeof window.electronConfig !== "undefined"
+    ? (window.electronConfig.get().backendUrl || "http://localhost:8000")
+    : (process.env.REACT_APP_BACKEND_URL || "http://localhost:8000");
+
 export default function Header({ onToggleSidebar }) {
   const [dotVisible, setDotVisible] = useState(true);
 
@@ -166,11 +171,17 @@ export default function Header({ onToggleSidebar }) {
   });
 
   const fetchCaptureStatus = useCallback(async () => {
-    if (!window.capture) return;
     try {
-      const data = await window.capture.status();
-      setCaptureRunning(data.running);
-      if (data.running && data.iface) setSelectedIface(data.iface);
+      if (window.capture) {
+        const data = await window.capture.status();
+        setCaptureRunning(data.running);
+        if (data.running && data.iface) setSelectedIface(data.iface);
+      } else {
+        const res  = await fetch(`${BACKEND}/capture/status`);
+        const data = await res.json();
+        setCaptureRunning(data.running);
+        if (data.running && data.iface) setSelectedIface(data.iface);
+      }
     } catch { }
   }, []);
 
@@ -181,13 +192,24 @@ export default function Header({ onToggleSidebar }) {
   }, [fetchCaptureStatus]);
 
   const toggleCapture = async () => {
-    if (!window.capture) return;
     setCaptureLoading(true);
     try {
-      if (captureRunning) {
-        await window.capture.stop();
+      if (window.capture) {
+        if (captureRunning) {
+          await window.capture.stop();
+        } else {
+          await window.capture.start({ iface: selectedIface });
+        }
       } else {
-        await window.capture.start({ iface: selectedIface });
+        if (captureRunning) {
+          await fetch(`${BACKEND}/capture/stop`, { method: "POST" });
+        } else {
+          await fetch(`${BACKEND}/capture/start`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ iface: selectedIface }),
+          });
+        }
       }
       setTimeout(fetchCaptureStatus, 600);
     } catch { } finally {
@@ -464,8 +486,9 @@ export default function Header({ onToggleSidebar }) {
         <button
           className="logout-btn"
           onClick={() => {
-            localStorage.removeItem("currentUser"); // optional
-            window.location.reload(); // reload app
+            localStorage.removeItem("adminLoggedIn");
+            localStorage.removeItem("token");
+            window.location.reload();
           }}
         >
           Logout

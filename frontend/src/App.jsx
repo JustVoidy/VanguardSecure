@@ -1,13 +1,5 @@
 import "./App.css";
 import { useState, useEffect, useRef, useCallback } from "react";
-
-function apiFetch(url, opts = {}) {
-  const token = localStorage.getItem("token");
-  return fetch(url, {
-    ...opts,
-    headers: { ...(opts.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-  });
-}
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import KpiCard from "./components/KpiCard";
@@ -16,9 +8,16 @@ import StatsCard from "./components/StatsCard";
 import UserProfile from "./Pages/Settings";
 import MitigationSettings from "./Pages/MitigationSettings";
 import EventsPage from "./components/EventsPage";
-
 import { COUNTRY_STATS } from "./data/mockData";
 import { useSocket } from "./hooks/useSocket";
+
+function apiFetch(url, opts = {}) {
+  const token = localStorage.getItem("token");
+  return fetch(url, {
+    ...opts,
+    headers: { ...(opts.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+}
 
 export default function App() {
   const [isDark, setIsDark] = useState(true);

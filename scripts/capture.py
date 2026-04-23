@@ -19,17 +19,29 @@ Notes:
 
 import argparse
 import fcntl
+import json
 import os
 import socket
 import struct
 import time
 import warnings
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 import requests
 
 warnings.filterwarnings("ignore")
+
+_SETTINGS_PATH = Path(__file__).resolve().parent.parent / "config" / "settings.json"
+
+
+def _load_settings() -> dict:
+    try:
+        return json.loads(_SETTINGS_PATH.read_text())
+    except Exception:
+        return {}
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONSTANTS — must match trainer.py and server.py exactly
@@ -49,10 +61,6 @@ SCAPY_FEATURES = [
     "FIN Flag Count", "SYN Flag Count", "RST Flag Count", "PSH Flag Count", "ACK Flag Count", "URG Flag Count",
     "Destination Port", "Init_Win_bytes_forward", "Init_Win_bytes_backward", "Down/Up Ratio",
 ]
-
-# Minimum packets a flow must have before being sent to the model.
-# Real floods generate thousands of packets — short flows produce noisy features.
-MIN_PACKETS = 20
 
 # ─────────────────────────────────────────────────────────────────────────────
 # NETWORK HELPERS
@@ -344,7 +352,7 @@ def send_to_server(
         resp.raise_for_status()
         return resp.json()
     except requests.exceptions.ConnectionError:
-        print(f"[!] Cannot reach server at {server_url} — is server.py running?")
+        print(f"[!] Cannot reach server at {server_url} — is the backend running?")
         return None
     except requests.exceptions.Timeout:
         print(f"[!] Server request timed out for flow {src_ip}:{sport} → {dst_ip}:{dport}")
@@ -352,36 +360,6 @@ def send_to_server(
     except Exception as e:
         print(f"[!] Server error: {e}")
         return None
-
-
-def ingest_event(backend_url: str, result: dict, flow_key: FlowKey) -> None:
-    """POST a scored attack flow to the main backend for DB persistence."""
-    if result is None or not result.get("is_attack"):
-        return
-
-    src_ip, dst_ip, sport, dport, proto = flow_key
-    prob = result.get("probability", 1.0)
-    payload = {
-        "events": [{
-            "flow_key": [src_ip, sport, dst_ip, dport, "TCP" if proto == 6 else "UDP"],
-            "attack_probability": prob,
-            "is_attack": True,
-            "threat_level": "HIGH" if prob > 0.9 else "MEDIUM",
-        }]
-    }
-
-    token = os.environ.get("NETSHIELD_TOKEN", "")
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
-
-    try:
-        requests.post(
-            f"{backend_url.rstrip('/')}/events/ingest",
-            json=payload,
-            headers=headers,
-            timeout=5,
-        )
-    except Exception as e:
-        print(f"[!] Failed to ingest event to backend: {e}")
 
 
 def print_result(result: dict, flow_key: FlowKey, flow_record: FlowRecord):
@@ -416,36 +394,28 @@ def print_result(result: dict, flow_key: FlowKey, flow_record: FlowRecord):
 # MAIN CAPTURE LOOP
 # ─────────────────────────────────────────────────────────────────────────────
 
-def run(iface: str, server_url: str, window: float, backend_url: str = "http://localhost:8000"):
+def run(iface: str, server_url: str, window: float):
     from scapy.all import sniff
 
+    cfg         = _load_settings()
+    min_packets = int(cfg.get("min_packets_to_score", 5))
     server_url  = server_url.rstrip("/")
-    backend_url = backend_url.rstrip("/")
 
-    # Verify inference server is reachable before starting capture
+    # Verify backend is reachable before starting capture
     try:
-        resp = requests.get(f"{server_url}/health", timeout=5)
+        resp = requests.get(f"{server_url}/predict/health", timeout=5)
         resp.raise_for_status()
         info = resp.json()
-        print(f"[*] Server connected — {info.get('message', 'OK')}")
+        print(f"[*] Backend connected — {info.get('message', 'OK')}")
     except Exception:
-        print(f"[!] Cannot reach server at {server_url}")
-        print(f"    Make sure server.py is running and accessible.")
+        print(f"[!] Cannot reach backend at {server_url}")
+        print(f"    Make sure the backend is running.")
         raise SystemExit(1)
-
-    # Detect local IP of the sniffed interface so we can ignore
-    # outbound flows originating from this device
-    local_ip = get_local_ip(iface)
-    if local_ip:
-        print(f"[*] Local IP               : {local_ip} (outbound flows will be ignored)")
-    else:
-        print(f"[!] Could not detect local IP for {iface} — all flows will be evaluated")
 
     print(f"[*] Capturing on interface : {iface}")
     print(f"[*] Flow window            : {window}s")
-    print(f"[*] Min packets per flow   : {MIN_PACKETS}")
-    print(f"[*] Inference server       : {server_url}")
-    print(f"[*] Backend URL            : {backend_url}")
+    print(f"[*] Min packets per flow   : {min_packets}")
+    print(f"[*] Backend URL            : {server_url}")
     print("-" * 60)
 
     tracker = FlowTracker(window_seconds=window)
@@ -454,23 +424,12 @@ def run(iface: str, server_url: str, window: float, backend_url: str = "http://l
         tracker.process(pkt)
 
         for flow_key, flow_record, duration in tracker.drain():
-            src_ip = flow_key[0]
-
-            # Ignore flows originating from this device —
-            # we are monitoring for attacks coming IN, not going out
-            if local_ip and src_ip == local_ip:
-                continue
-
-            # Skip flows with too few packets —
-            # real floods have thousands of packets per second,
-            # short flows produce noisy features that cause false positives
             total_pkts = len(flow_record.fwd_lengths) + len(flow_record.bwd_lengths)
-            if total_pkts < MIN_PACKETS:
+            if total_pkts < min_packets:
                 continue
 
             features = extract_features(flow_record, duration)
             result   = send_to_server(server_url, features, flow_key, flow_record, duration)
-            ingest_event(backend_url, result, flow_key)
             print_result(result, flow_key, flow_record)
 
     sniff(
@@ -486,19 +445,22 @@ def run(iface: str, server_url: str, window: float, backend_url: str = "http://l
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main():
+    cfg = _load_settings()
+    default_server = cfg.get("backend_url", "http://localhost:8000")
+    default_window = float(cfg.get("flow_timeout", 5.0))
+
     parser = argparse.ArgumentParser(description="DDoS local capture and flow builder")
-    parser.add_argument("--iface",       required=True, help="Network interface to sniff (e.g. eth0, wlan0)")
-    parser.add_argument("--server",      required=True, help="Inference server URL (e.g. http://localhost:8001)")
-    parser.add_argument("--backend-url", default="http://localhost:8000", help="Main backend URL for event ingestion")
-    parser.add_argument("--window",      type=float, default=5.0, help="Flow window in seconds (default: 5)")
+    parser.add_argument("--iface",   required=True,  help="Network interface to sniff (e.g. eth0, wlan0)")
+    parser.add_argument("--server",  default=default_server, help="Backend URL")
+    parser.add_argument("--window",  type=float, default=default_window, help="Flow window in seconds")
     args = parser.parse_args()
 
     if os.geteuid() != 0:
         print("[!] This script requires root privileges to capture packets.")
-        print("    Run with: sudo python capture.py --iface <iface> --server <url>")
+        print("    Run with: sudo python capture.py --iface <iface>")
         raise SystemExit(1)
 
-    run(args.iface, args.server, args.window, args.backend_url)
+    run(args.iface, args.server, args.window)
 
 
 if __name__ == "__main__":

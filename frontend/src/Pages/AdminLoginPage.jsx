@@ -2,7 +2,7 @@ import { useState } from "react";
 
 const API = typeof window.electronConfig !== "undefined"
   ? (window.electronConfig.get().backendUrl || "http://localhost:8000")
-  : "http://localhost:8000";
+  : (process.env.REACT_APP_BACKEND_URL || "http://localhost:8000");
 
 export default function AdminLogin({ onLogin }) {
   const [isSignup, setIsSignup]       = useState(false);
@@ -36,7 +36,12 @@ export default function AdminLogin({ onLogin }) {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.detail || "Authentication failed.");
+        const detail = data.detail;
+        setError(
+          Array.isArray(detail)
+            ? detail.map((e) => e.msg).join(", ")
+            : detail || "Authentication failed."
+        );
         return;
       }
 

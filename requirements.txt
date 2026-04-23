@@ -9,7 +9,7 @@ requests
 python-multipart
 
 # AI & Machine Learning
-tensorflow>=2.15.0
+torch
 numpy
 scikit-learn
 joblib
@@ -17,6 +17,7 @@ joblib
 # Auth
 python-jose[cryptography]
 passlib[bcrypt]
+python-dotenv
 
 # Network & Real-time
 scapy

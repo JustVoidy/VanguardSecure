@@ -30,6 +30,9 @@
   "build": {
     "appId": "com.netshield.desktop",
     "productName": "NetShield",
+    "extraMetadata": {
+      "main": "main.js"
+    },
     "files": [
       "build/**/*",
       "main.js",
@@ -39,17 +42,30 @@
       {
         "from": "../dist/capture",
         "to": "capture",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "mac": {
       "category": "public.app-category.utilities",
-      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }]
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
     },
     "win": {
       "target": "nsis",
       "extraResources": [
-        { "from": "../dist/capture.exe", "to": "capture.exe" }
+        {
+          "from": "../dist/capture.exe",
+          "to": "capture.exe"
+        }
       ]
     },
     "linux": {
@@ -78,6 +94,7 @@
   "devDependencies": {
     "concurrently": "^9.2.1",
     "electron": "^41.2.1",
+    "electron-builder": "^25.1.8",
     "electron-updater": "^6.8.3",
     "wait-on": "^9.0.5"
   }

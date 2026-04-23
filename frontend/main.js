@@ -39,18 +39,17 @@ function captureCmd() {
 
 let captureProc = null;
 
-function startCapture({ iface, serverUrl, backendUrl } = {}) {
+function startCapture({ iface, serverUrl } = {}) {
   if (captureProc && captureProc.exitCode === null) {
     return { status: "already_running", pid: captureProc.pid };
   }
 
-  const cfg  = readConfig();
-  iface      = iface      || cfg.interface   || "eth0";
-  serverUrl  = serverUrl  || cfg.serverUrl   || "http://localhost:8001";
-  backendUrl = backendUrl || cfg.backendUrl  || "http://localhost:8000";
+  const cfg = readConfig();
+  iface     = iface     || cfg.interface || "eth0";
+  serverUrl = serverUrl || cfg.backendUrl || cfg.serverUrl || "http://localhost:8000";
 
   const [exe, prefix] = captureCmd();
-  const args = [...prefix, "--iface", iface, "--server", serverUrl, "--backend-url", backendUrl];
+  const args = [...prefix, "--iface", iface, "--server", serverUrl];
 
   const logPath = path.join(os.homedir(), ".netshield", "capture.log");
   fs.mkdirSync(CONFIG_DIR, { recursive: true });
@@ -63,7 +62,7 @@ function startCapture({ iface, serverUrl, backendUrl } = {}) {
   });
   captureProc.on("exit", () => { captureProc = null; });
 
-  return { status: "started", pid: captureProc.pid, iface, serverUrl, backendUrl };
+  return { status: "started", pid: captureProc.pid, iface, serverUrl };
 }
 
 function stopCapture() {
